@@ -1,9 +1,15 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { randomUUID as uuidv4 } from 'node:crypto';
 import Redis from 'ioredis';
-import { delay } from 'src/common/utils';
 import { StreamGroupNames, StreamNames } from './types';
-import { ConfigService } from '@nestjs/config';
+import { randomUUID as uuidv4 } from 'node:crypto';
+
+interface RedisStreamResponse {
+  stream: string;
+  messages: {
+    id: string;
+    fields: string[];
+  }[];
+}
 
 @Injectable()
 export class RedisService implements OnModuleInit {
@@ -11,10 +17,10 @@ export class RedisService implements OnModuleInit {
   private isRedisClientConnected = false;
   private readonly logger = new Logger(RedisService.name);
 
-  constructor(private readonly configService: ConfigService) {
+  constructor() {
     this.redisClient = new Redis({
-      host: this.configService.get('REDIS_HOST') || 'localhost',
-      port: parseInt(this.configService.get('REDIS_PORT') || '6379'),
+      host: process.env.REDIS_HOST || 'localhost',
+      port: parseInt(process.env.REDIS_PORT || '6379'),
       retryStrategy: (times) => {
         if (times <= 3) {
           this.logger.log(`Retrying Redis connection, attempt ${times}`);
@@ -36,36 +42,10 @@ export class RedisService implements OnModuleInit {
   }
 
   async onModuleInit() {
-    // Ensure consumer group exists
     await this.ensureStreamGroup(
       StreamNames.PLATFORM_AUDIT_LOGS,
       StreamGroupNames.PLATFORM_AUDIT_LOGS_GROUP,
     );
-  }
-
-  async xAddMessage(
-    stream: string,
-    message: Record<string, any>,
-  ): Promise<string> {
-    try {
-      if (!this.isRedisClientConnected) {
-        this.logger.warn('Redis not connected, skipping message');
-        return '';
-      }
-
-      const result = await this.redisClient.xadd(
-        stream,
-        '*',
-        'data',
-        JSON.stringify(message),
-      );
-      return result || '';
-    } catch (error) {
-      this.logger.error(
-        `Failed to add message to stream ${stream}: ${error.message}`,
-      );
-      return '';
-    }
   }
 
   async xReadMessages(
@@ -77,7 +57,7 @@ export class RedisService implements OnModuleInit {
       if (!this.isRedisClientConnected) return [];
 
       const consumerName = uuidv4();
-      const messages = await this.redisClient.xreadgroup(
+      const messages = (await this.redisClient.xreadgroup(
         'GROUP',
         groupName,
         consumerName,
@@ -86,15 +66,15 @@ export class RedisService implements OnModuleInit {
         'STREAMS',
         streamName,
         '>',
-      );
+      )) as [string, [string, string[]][]][] | null;
 
       if (messages && messages.length > 0) {
-        return (messages as any)[0][1].map(
-          ([id, fields]: [string, string[]]) => ({
-            id,
-            data: JSON.parse(fields[1]),
-          }),
-        );
+        // Convert the raw Redis response to a more readable structure
+        const [stream, entries] = messages[0];
+        return entries.map(([id, fields]) => ({
+          id,
+          data: JSON.parse(fields[1]),
+        }));
       }
     } catch (error) {
       if (error.message.includes('NOGROUP')) {
@@ -131,19 +111,15 @@ export class RedisService implements OnModuleInit {
 
   async xDel(stream: string, messageId: string): Promise<boolean> {
     if (!this.isRedisClientConnected) return false;
-
-    for (let i = 0; i < 5; i++) {
-      try {
-        if (i > 0) await delay(2000);
-        const result = await this.redisClient.xdel(stream, messageId);
-        if (result === 1) return true;
-      } catch (error) {
-        this.logger.error(
-          `Failed to delete message ${messageId} from stream ${stream}: ${error.message}`,
-        );
-      }
+    try {
+      const result = await this.redisClient.xdel(stream, messageId);
+      return result === 1;
+    } catch (error) {
+      this.logger.error(
+        `Failed to delete message ${messageId}: ${error.message}`,
+      );
+      return false;
     }
-    return false;
   }
 
   private async ensureStreamGroup(
@@ -182,17 +158,11 @@ export class RedisService implements OnModuleInit {
       )) as any[];
       for (let i = 0; i < groups.length; i++) {
         const group = groups[i];
-        if (group[1] === groupName) {
-          return true;
-        }
+        if (group[1] === groupName) return true;
       }
       return false;
     } catch {
       return false;
     }
-  }
-
-  getClient(): Redis {
-    return this.redisClient;
   }
 }
