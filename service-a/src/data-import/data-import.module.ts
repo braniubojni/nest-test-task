@@ -4,8 +4,8 @@ import { DataImportController } from './data-import.controller';
 import { HttpModule } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
-import { Product, ProductSchema } from 'src/products/schemas/product.schema';
-import { SharedModule } from 'src/shared/shared.module';
+import { Product, ProductSchema } from '../products/schemas/product.schema';
+import { SharedModule } from '../shared/shared.module';
 
 @Module({
   imports: [

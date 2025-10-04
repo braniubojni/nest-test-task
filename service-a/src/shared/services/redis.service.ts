@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { randomUUID as uuidv4 } from 'node:crypto';
 import Redis from 'ioredis';
-import { delay } from 'src/common/utils';
+import { delay } from '../../common/utils';
 import { StreamGroupNames, StreamNames } from './types';
 import { ConfigService } from '@nestjs/config';
 

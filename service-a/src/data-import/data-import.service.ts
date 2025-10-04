@@ -3,12 +3,12 @@ import { parse } from 'csv-parse/sync';
 import * as XLSX from 'xlsx';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { Product } from 'src/products/schemas/product.schema';
+import { Product } from '../products/schemas/product.schema';
 import fsp from 'node:fs/promises';
 import { HttpService } from '@nestjs/axios';
-import { CreateProductDto } from 'src/products/dto/product.dto';
+import { CreateProductDto } from '../products/dto/product.dto';
 import { lastValueFrom } from 'rxjs';
-import { EventPublisherService } from 'src/shared/services/event-publisher.service';
+import { EventPublisherService } from '../shared/services/event-publisher.service';
 
 @Injectable()
 export class DataImportService {

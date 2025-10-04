@@ -2,14 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import Redis from 'ioredis';
 import { StreamGroupNames, StreamNames } from './types';
 import { randomUUID as uuidv4 } from 'node:crypto';
-
-interface RedisStreamResponse {
-  stream: string;
-  messages: {
-    id: string;
-    fields: string[];
-  }[];
-}
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class RedisService implements OnModuleInit {
@@ -17,10 +10,10 @@ export class RedisService implements OnModuleInit {
   private isRedisClientConnected = false;
   private readonly logger = new Logger(RedisService.name);
 
-  constructor() {
+  constructor(private readonly configService: ConfigService) {
     this.redisClient = new Redis({
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379'),
+      host: this.configService.get('REDIS_HOST') || 'localhost',
+      port: parseInt(this.configService.get('REDIS_PORT') || '6379'),
       retryStrategy: (times) => {
         if (times <= 3) {
           this.logger.log(`Retrying Redis connection, attempt ${times}`);
